@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OpenFreeMap for COMBAT-AID</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin:0; padding:0; }
+        #map { position:absolute; top:0; bottom:0; width:100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([28.6139, 77.2090], 13); // Default location (Delhi)
+        L.tileLayer('https://tiles.openfreemap.org/{style}/{z}/{x}/{y}.png', {
+            style: 'liberty', // can also use 'positron', 'dark'
+            attribution: '© <a href="https://openfreemap.org/">OpenFreeMap</a>'
+        }).addTo(map);
+    </script>
+</body>
+</html>
