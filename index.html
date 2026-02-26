@@ -10,15 +10,15 @@
         body { margin:0; padding:0; }
         #map { position:absolute; top:0; bottom:0; width:100%; }
     </style>
+    #map { background: #aaccff; }
 </head>
 <body>
     <div id="map"></div>
     <script>
         var map = L.map('map').setView([28.6139, 77.2090], 13); // Default location (Delhi)
-        L.tileLayer('https://tiles.openfreemap.org/{style}/{z}/{x}/{y}.png', {
-            style: 'liberty', // can also use 'positron', 'dark'
-            attribution: '© <a href="https://openfreemap.org/">OpenFreeMap</a>'
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
     </script>
 </body>
 </html>
