@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OpenFreeMap for COMBAT-AID</title>
+    <title>COMBAT‑AID Commander Map</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,39 +10,44 @@
         body { margin:0; padding:0; }
         #map { position:absolute; top:0; bottom:0; width:100%; }
     </style>
-    #map { background: #aaccff; }
 </head>
 <body>
     <div id="map"></div>
     <script>
-        var map = L.map('map').setView([28.6139, 77.2090], 13); // Default location (Delhi)
+        // Initialize map (default view: Delhi)
+        var map = L.map('map').setView([28.6139, 77.2090], 13);
+
+        // Use OpenStreetMap tiles (free, no key)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-}).addTo(map);
-        // Store markers in an object keyed by soldier ID
-var markers = {};
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-function addMarker(id, lat, lon, color, label) {
-    // If marker already exists, just move it
-    if (markers[id]) {
-        markers[id].setLatLng([lat, lon]);
-    } else {
-        // Create a new marker
-        var marker = L.marker([lat, lon]).addTo(map);
-        if (label) {
-            marker.bindPopup(label);
+        // Object to store markers by soldier ID
+        var markers = {};
+
+        // Function to add or update a marker
+        function addMarker(id, lat, lon, color, label) {
+            if (markers[id]) {
+                // Marker exists – just move it
+                markers[id].setLatLng([lat, lon]);
+            } else {
+                // Create a new marker
+                var marker = L.marker([lat, lon]).addTo(map);
+                if (label) {
+                    marker.bindPopup(label);
+                }
+                markers[id] = marker;
+            }
+            // Optionally change marker colour (requires custom icon – we'll keep default)
         }
-        markers[id] = marker;
-    }
-    // Optionally change marker icon color (requires custom icon, but we'll keep simple)
-}
 
-function removeMarker(id) {
-    if (markers[id]) {
-        map.removeLayer(markers[id]);
-        delete markers[id];
-    }
-}
+        // Function to remove a marker
+        function removeMarker(id) {
+            if (markers[id]) {
+                map.removeLayer(markers[id]);
+                delete markers[id];
+            }
+        }
     </script>
 </body>
 </html>
