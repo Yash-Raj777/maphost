@@ -19,6 +19,30 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
+        // Store markers in an object keyed by soldier ID
+var markers = {};
+
+function addMarker(id, lat, lon, color, label) {
+    // If marker already exists, just move it
+    if (markers[id]) {
+        markers[id].setLatLng([lat, lon]);
+    } else {
+        // Create a new marker
+        var marker = L.marker([lat, lon]).addTo(map);
+        if (label) {
+            marker.bindPopup(label);
+        }
+        markers[id] = marker;
+    }
+    // Optionally change marker icon color (requires custom icon, but we'll keep simple)
+}
+
+function removeMarker(id) {
+    if (markers[id]) {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+    }
+}
     </script>
 </body>
 </html>
