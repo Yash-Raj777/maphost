@@ -14,31 +14,58 @@
 <body>
     <div id="map"></div>
     <script>
-        // Initialize map (default view: Delhi)
-        var map = L.map('map').setView([28.6139, 77.2090], 13);
+        // Center on Patna (latitude 25.5941, longitude 85.1376)
+        var map = L.map('map').setView([25.5941, 85.1376], 13);
 
         // Use OpenStreetMap tiles (free, no key)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        // Object to store markers by soldier ID
+        // Store markers by soldier ID
         var markers = {};
 
         // Function to add or update a marker
+        // color: "green", "orange", "red", "gray"
         function addMarker(id, lat, lon, color, label) {
             if (markers[id]) {
-                // Marker exists – just move it
+                // Update existing marker
                 markers[id].setLatLng([lat, lon]);
+                // Change icon color – we'll use a simple approach: remove and re-add with new icon
+                // For simplicity, we'll just change the marker's icon if needed
+                var newIcon = getIcon(color);
+                markers[id].setIcon(newIcon);
+                // Update popup content
+                if (markers[id].getPopup()) {
+                    markers[id].setPopupContent(label);
+                } else {
+                    markers[id].bindPopup(label);
+                }
             } else {
-                // Create a new marker
-                var marker = L.marker([lat, lon]).addTo(map);
+                // Create new marker
+                var icon = getIcon(color);
+                var marker = L.marker([lat, lon], { icon: icon }).addTo(map);
                 if (label) {
                     marker.bindPopup(label);
                 }
                 markers[id] = marker;
             }
-            // Optionally change marker colour (requires custom icon – we'll keep default)
+        }
+
+        // Helper to get marker icon based on color
+        function getIcon(color) {
+            // Default Leaflet marker, we can use different colored markers by creating custom icons
+            // Since we don't have custom images, we'll use a simple approach: change the marker's color using a divIcon
+            // For simplicity, we'll just use the default marker but change the color via CSS? Not possible.
+            // Instead, we'll use a simple divIcon with background color.
+            // But to keep it simple, we'll keep the default blue marker and use the popup to indicate status.
+            // Alternatively, we can use a circle marker:
+            // return L.circleMarker([lat, lon], { radius: 8, fillColor: color, color: '#000', weight: 1, opacity: 1, fillOpacity: 0.8 });
+            // But we already have the marker API, so we'll use circleMarker for better control.
+            // However, to maintain compatibility with previous code, we'll use circleMarker which is simpler.
+            // Actually, we need to return a marker (not circleMarker) to keep popup support. Let's create a custom DivIcon.
+            var iconHtml = <div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 1px solid black;"></div>;
+            return L.divIcon({ html: iconHtml, className: 'custom-marker', iconSize: [12, 12] });
         }
 
         // Function to remove a marker
@@ -48,6 +75,16 @@
                 delete markers[id];
             }
         }
+
+        // Function to update only marker color (for SOS)
+        function setMarkerColor(id, color) {
+            if (markers[id]) {
+                var newIcon = getIcon(color);
+                markers[id].setIcon(newIcon);
+            }
+        }
+        // For simplicity, we'll also use circleMarker approach (works with popups too)
+        // But circleMarker uses a different API. Let's stick with L.marker + custom icon.
     </script>
 </body>
 </html>
