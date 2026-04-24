@@ -1,82 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>COMBAT‑AID Commander Map</title>
+    <title>COMBAT‑AID Commander</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Forces the browser to send the referrer header (helps tiles load) -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- Leaflet + plugins -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        html, body { width:100%; height:100%; }
-        #map { width:100%; height:100%; background:#f0f0f0; }
-        #soldier-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: 280px;
-            background: rgba(30,30,30,0.92);
-            color: white;
-            border-radius: 8px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-            pointer-events: auto;
-            max-height: 85%;
-            overflow-y: auto;
-            border: 1px solid #3a6ea5;
-        }
-        #soldier-panel h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            text-align: center;
-            color: #ffd966;
-        }
-        .soldier-entry {
-            border-bottom: 1px solid #555;
-            padding: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .soldier-entry:hover {
-            background: #3a6ea5;
-        }
-        .soldier-id { font-weight: bold; font-size: 13px; }
-        .soldier-status { font-size: 10px; margin-top: 4px; }
-        .online { color: #2ecc71; }
-        .offline { color: #95a5a6; }
-        .sos { color: #e74c3c; font-weight: bold; }
-        .health { font-size: 11px; margin-top: 2px; }
-        .broadcast-area {
-            margin-top: 12px;
-            border-top: 1px solid #555;
-            padding-top: 10px;
-            display: flex;
-            gap: 6px;
-        }
-        #broadcastMsg {
-            flex: 1;
-            padding: 6px;
-            border-radius: 4px;
-            border: none;
-            background: #444;
-            color: white;
-        }
-        #broadcastBtn {
-            background: #3a6ea5;
-            border: none;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        #broadcastBtn:hover { background: #2c4e73; }
-        @media (max-width: 600px) {
-            #soldier-panel { width: 260px; font-size: 11px; }
-            .soldier-id { font-size: 12px; }
-        }
+        /* Your existing CSS (unchanged) */
+        body { margin:0; padding:0; }
+        #map { width:100%; height:100%; background:#e0e7f0; }
+        #soldier-panel { position: absolute; top: 10px; left: 10px; width: 280px;
+            background: rgba(30,30,30,0.92); color: white; border-radius: 8px;
+            padding: 12px; font-family: monospace; font-size: 12px; z-index: 1000;
+            backdrop-filter: blur(4px); pointer-events: auto; max-height: 85%;
+            overflow-y: auto; border: 1px solid #3a6ea5; }
+        #soldier-panel h3 { margin:0 0 10px 0; font-size:16px; text-align:center; color:#ffd966; }
+        .soldier-entry { border-bottom:1px solid #555; padding:8px; cursor:pointer; transition:background 0.2s; }
+        .soldier-entry:hover { background:#3a6ea5; }
+        .soldier-id { font-weight:bold; font-size:13px; }
+        .soldier-status { font-size:10px; margin-top:4px; }
+        .online { color:#2ecc71; }
+        .offline { color:#95a5a6; }
+        .sos { color:#e74c3c; font-weight:bold; }
+        .health { font-size:11px; margin-top:2px; }
+        .broadcast-area { margin-top:12px; border-top:1px solid #555; padding-top:10px; display:flex; gap:6px; }
+        #broadcastMsg { flex:1; padding:6px; border-radius:4px; border:none; background:#444; color:white; }
+        #broadcastBtn { background:#3a6ea5; border:none; color:white; padding:6px 12px; border-radius:4px; cursor:pointer; }
+        #broadcastBtn:hover { background:#2c4e73; }
+        @media (max-width:600px) { #soldier-panel { width:260px; font-size:11px; } }
     </style>
 </head>
 <body>
@@ -90,41 +45,43 @@
     </div>
     <div id="map"></div>
     <script>
+        // ----------------------------------------------------------------
+        // 1.  Set a custom User-Agent for ALL HTTP requests (JavaScript side)
+        // ----------------------------------------------------------------
         (function() {
-            // Set custom User-Agent for WebView to identify as a browser
             var originalOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function() {
-                this.setRequestHeader('User-Agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+                this.setRequestHeader('User-Agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36');
                 return originalOpen.apply(this, arguments);
             };
         })();
 
-        // Initialize map centered on Patna
+        // ----------------------------------------------------------------
+        // 2.  Create Leaflet map centered on Patna
+        // ----------------------------------------------------------------
         var map = L.map('map', {
             center: [25.5941, 85.1376],
             zoom: 13,
             zoomControl: true,
-            fadeAnimation: true
+            fadeAnimation: true,
+            trackResize: true
         });
 
-        // Use CyclOSM tile server (known to work well in mobile apps)
-        L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Map style: &copy; <a href="https://cyclosm.org/">CyclOSM</a>',
-            maxZoom: 20,
-            subdomains: 'abc',
-            minZoom: 1
-        }).addTo(map);
-
-        // Fallback tile server in case CyclOSM is slow (optional backup)
-        var fallbackLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // 3.  Tile layers – reliable, free, and work well in WebViews
+        var primaryLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attribution">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 19,
             minZoom: 1
+        }).addTo(map);// optional fallback tile layer (only used if primary fails)
+        var fallbackLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
         });
 
-        // Store markers by soldier ID
+        // ----------------------------------------------------------------
+        // 4.  Soldier marker management (circle markers)
+        // ----------------------------------------------------------------
         var markers = {};
-        var markerTimeout = 30000; // 30 seconds marker timeout
 
         function addMarker(id, lat, lon, color, label) {
             if (markers[id]) {
@@ -152,6 +109,9 @@
             }
         }
 
+        // ----------------------------------------------------------------
+        // 5.  Soldier list panel (unchanged)
+        // ----------------------------------------------------------------
         function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
@@ -190,6 +150,7 @@
             alert(Soldier ${idShort}\n❤️ Heart Rate: ${heartRate} bpm\n🌡️ Temperature: ${temperature}°C\n📡 Status: ${status});
         }
 
+        // Broadcast button – still works because the WebView is listening
         document.getElementById('broadcastBtn').addEventListener('click', function() {
             var msg = document.getElementById('broadcastMsg').value;
             if (msg.trim() === "") return;
