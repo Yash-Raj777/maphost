@@ -14,7 +14,7 @@
             top: 10px;
             left: 10px;
             width: 280px;
-            background: rgba(30,30,30,0.9);
+            background: rgba(30,30,30,0.92);
             color: white;
             border-radius: 8px;
             padding: 12px;
@@ -85,7 +85,6 @@
     </div>
     <div id="map"></div>
     <script>
-        // Center on Patna
         var map = L.map('map').setView([25.5941, 85.1376], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -118,7 +117,6 @@
                 delete markers[id];
             }
         }
-        // Update soldier list panel
         function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
@@ -134,24 +132,32 @@
                     statusClass = 'sos';
                     statusText = '🔴 SOS ACTIVE';
                 }
-                html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ')">';
-                html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
-                html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
-                html += '<div class="soldier-status ' + statusClass + '">' + statusText + '</div>';
-                html += '</div>';
+                var lastSeen = '';
+                if (s.lastSeenSecondsAgo !== undefined) {
+                    var sec = s.lastSeenSecondsAgo;
+                    if (sec < 60) lastSeen = ${sec} sec ago;
+                    else lastSeen = ${Math.floor(sec/60)} min ago;
+                }
+                html += <div class="soldier-entry" onclick="centerOn(${s.lat}, ${s.lon}, '${s.idShort}', ${s.heartRate}, ${s.temperature}, ${s.isOnline}, ${s.sos})">;
+                html += <div class="soldier-id">🎖️ ${s.idShort}</div>;
+                html += <div class="health">❤️ ${s.heartRate} bpm &nbsp; 🌡️ ${s.temperature}°C</div>;
+                html += <div class="soldier-status ${statusClass}">${statusText}</div>;
+                if (lastSeen) html += <div style="font-size:9px; color:#aaa;">Last update: ${lastSeen}</div>;
+                html += </div>;
             });
             listDiv.innerHTML = html;
         }
 
-        function centerOn(lat, lon) {
+        function centerOn(lat, lon, idShort, heartRate, temperature, isOnline, sos) {
             map.setView([lat, lon], 15);
+            var status = isOnline ? "Online" : "Offline";
+            if (sos) status = "SOS ACTIVE";
+            alert(Soldier ${idShort}\n❤️ Heart Rate: ${heartRate} bpm\n🌡️ Temperature: ${temperature}°C\n📡 Status: ${status});
         }
 
-        // Broadcast message to Unity (which will send to Firestore)
         document.getElementById('broadcastBtn').addEventListener('click', function() {
             var msg = document.getElementById('broadcastMsg').value;
             if (msg.trim() === "") return;
-            // Use the prompt hack to send to Unity's WebView callback
             prompt("broadcast:" + msg);
             document.getElementById('broadcastMsg').value = "";
         });
