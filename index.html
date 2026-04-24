@@ -4,6 +4,8 @@
     <title>COMBAT‑AID Commander Map</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Force referrer policy to satisfy OpenStreetMap requirements -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -85,16 +87,28 @@
     </div>
     <div id="map"></div>
     <script>
+        // Ensure referrer policy is set (additional safety)
+        if (!document.querySelector('meta[name="referrer"]')) {
+            var meta = document.createElement('meta');
+            meta.name = 'referrer';
+            meta.content = 'strict-origin-when-cross-origin';
+            document.head.appendChild(meta);
+        }
+
+        // Initialize map centred on Patna
         var map = L.map('map').setView([25.5941, 85.1376], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+
+        // Use OpenStreetMap tile layer with referrer policy (works with new OSM restrictions)
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            referrerPolicy: 'strict-origin-when-cross-origin'
         }).addTo(map);
 
+        // Store markers by soldier ID
         var markers = {};
 
         function addMarker(id, lat, lon, color, label) {
-            if (markers[id]) {
-                markers[id].setLatLng([lat, lon]);
+            if (markers[id]) {markers[id].setLatLng([lat, lon]);
                 markers[id].setStyle({ fillColor: color, color: color });
                 markers[id].setPopupContent(label);
             } else {
@@ -117,6 +131,7 @@
                 delete markers[id];
             }
         }
+
         function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
