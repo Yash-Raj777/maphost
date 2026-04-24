@@ -3,14 +3,13 @@
 <head>
     <title>COMBAT‑AID Commander Map</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Force referrer policy to satisfy OpenStreetMap requirements -->
-    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:100%; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        html, body { width:100%; height:100%; }
+        #map { width:100%; height:100%; background:#f0f0f0; }
         #soldier-panel {
             position: absolute;
             top: 10px;
@@ -74,6 +73,10 @@
             cursor: pointer;
         }
         #broadcastBtn:hover { background: #2c4e73; }
+        @media (max-width: 600px) {
+            #soldier-panel { width: 260px; font-size: 11px; }
+            .soldier-id { font-size: 12px; }
+        }
     </style>
 </head>
 <body>
@@ -87,28 +90,45 @@
     </div>
     <div id="map"></div>
     <script>
-        // Ensure referrer policy is set (additional safety)
-        if (!document.querySelector('meta[name="referrer"]')) {
-            var meta = document.createElement('meta');
-            meta.name = 'referrer';
-            meta.content = 'strict-origin-when-cross-origin';
-            document.head.appendChild(meta);
-        }
+        (function() {
+            // Set custom User-Agent for WebView to identify as a browser
+            var originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function() {
+                this.setRequestHeader('User-Agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+                return originalOpen.apply(this, arguments);
+            };
+        })();
 
-        // Initialize map centred on Patna
-        var map = L.map('map').setView([25.5941, 85.1376], 13);
+        // Initialize map centered on Patna
+        var map = L.map('map', {
+            center: [25.5941, 85.1376],
+            zoom: 13,
+            zoomControl: true,
+            fadeAnimation: true
+        });
 
-        // Use OpenStreetMap tile layer with referrer policy (works with new OSM restrictions)
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            referrerPolicy: 'strict-origin-when-cross-origin'
+        // Use CyclOSM tile server (known to work well in mobile apps)
+        L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Map style: &copy; <a href="https://cyclosm.org/">CyclOSM</a>',
+            maxZoom: 20,
+            subdomains: 'abc',
+            minZoom: 1
         }).addTo(map);
+
+        // Fallback tile server in case CyclOSM is slow (optional backup)
+        var fallbackLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attribution">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19,
+            minZoom: 1
+        });
 
         // Store markers by soldier ID
         var markers = {};
+        var markerTimeout = 30000; // 30 seconds marker timeout
 
         function addMarker(id, lat, lon, color, label) {
-            if (markers[id]) {markers[id].setLatLng([lat, lon]);
+            if (markers[id]) {
+                markers[id].setLatLng([lat, lon]);
                 markers[id].setStyle({ fillColor: color, color: color });
                 markers[id].setPopupContent(label);
             } else {
