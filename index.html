@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>COMBAT‑AID Commander Map</title>
+    <title>COMBAT-AID Commander Map</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:100%; background:#f0f0f0; }
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #e0e7f0; }
         #soldier-panel {
             position: absolute;
             top: 10px;
@@ -22,7 +22,6 @@
             font-size: 12px;
             z-index: 1000;
             backdrop-filter: blur(4px);
-            pointer-events: auto;
             max-height: 85%;
             overflow-y: auto;
             border: 1px solid #3a6ea5;
@@ -39,9 +38,7 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .soldier-entry:hover {
-            background: #3a6ea5;
-        }
+        .soldier-entry:hover { background: #3a6ea5; }
         .soldier-id { font-weight: bold; font-size: 13px; }
         .soldier-status { font-size: 10px; margin-top: 4px; }
         .online { color: #2ecc71; }
@@ -84,36 +81,22 @@
         </div>
     </div>
     <div id="map"></div>
+
     <script>
-        // Initialize map centered on Patna
+        // 1. Initialize map (centered on Patna)
         var map = L.map('map').setView([25.5941, 85.1376], 13);
 
-        // -- Primary Layer: CartoDB Positron (reliable, permissive, works without strict header checks)
-        var primaryTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // 2. Use CartoDB Light tiles (reliable, works without referrer issues)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attribution">CARTO</a>',
             subdomains: 'abcd',
-            maxZoom: 19,
-            minZoom: 1
-        });
+            maxZoom: 19
+        }).addTo(map);
 
-        // -- Fallback Layer: OSM France HOT (stable backup in case primary fails)
-        var fallbackTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-            maxZoom: 19,
-            minZoom: 1
-        });
-
-        // -- Add the primary layer to the map
-        map.addLayer(primaryTileLayer);
-
-        // -- If primary layer fails, switch to fallback
-        primaryTileLayer.on('tileerror', function() {
-            console.warn("Primary tile layer failed, switching to fallback.");
-            map.removeLayer(primaryTileLayer);
-            map.addLayer(fallbackTileLayer);
-        });// Store markers by soldier ID
+        // 3. Store markers
         var markers = {};
 
+        // 4. Add or update marker
         function addMarker(id, lat, lon, color, label) {
             if (markers[id]) {
                 markers[id].setLatLng([lat, lon]);
@@ -133,6 +116,7 @@
             }
         }
 
+        // 5. Remove marker
         function removeMarker(id) {
             if (markers[id]) {
                 map.removeLayer(markers[id]);
@@ -140,41 +124,48 @@
             }
         }
 
+        // 6. Update the soldier list panel
         function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
-            if (!soldiersArray.length) {
+            if (!soldiersArray || soldiersArray.length === 0) {
                 listDiv.innerHTML = '<div style="text-align:center;">No soldiers online</div>';
                 return;
             }
             var html = '';
-            soldiersArray.forEach(function(s) {
+            for (var i = 0; i < soldiersArray.length; i++) {
+                var s = soldiersArray[i];
                 var statusClass = s.isOnline ? 'online' : 'offline';
                 var statusText = s.isOnline ? '● Online' : '○ Offline';
-                if (s.sos) { statusClass = 'sos'; statusText = '🔴 SOS ACTIVE'; }
+                if (s.sos) {
+                    statusClass = 'sos';
+                    statusText = '🔴 SOS ACTIVE';
+                }
                 var lastSeen = '';
                 if (s.lastSeenSecondsAgo !== undefined) {
                     var sec = s.lastSeenSecondsAgo;
-                    if (sec < 60) lastSeen = ${sec} sec ago;
-                    else lastSeen = ${Math.floor(sec/60)} min ago;
+                    if (sec < 60) lastSeen = sec + ' sec ago';
+                    else lastSeen = Math.floor(sec/60) + ' min ago';
                 }
-                html += <div class="soldier-entry" onclick="centerOn(${s.lat}, ${s.lon}, '${s.idShort}', ${s.heartRate}, ${s.temperature}, ${s.isOnline}, ${s.sos})">;
-                html += <div class="soldier-id">🎖️ ${s.idShort}</div>;
-                html += <div class="health">❤️ ${s.heartRate} bpm &nbsp; 🌡️ ${s.temperature}°C</div>;
-                html += <div class="soldier-status ${statusClass}">${statusText}</div>;
-                if (lastSeen) html += <div style="font-size:9px; color:#aaa;">Last update: ${lastSeen}</div>;
-                html += </div>;
-            });
+                html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ', \'' + s.idShort + '\', ' + s.heartRate + ', ' + s.temperature + ', ' + s.isOnline + ', ' + s.sos + ')">';
+                html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
+                html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
+                html += '<div class="soldier-status ' + statusClass + '">' + statusText + '</div>';
+                if (lastSeen) html += '<div style="font-size:9px; color:#aaa;">Last update: ' + lastSeen + '</div>';
+                html += '</div>';
+            }
             listDiv.innerHTML = html;
         }
 
+        // 7. Center map on a soldier and show alert
         function centerOn(lat, lon, idShort, heartRate, temperature, isOnline, sos) {
             map.setView([lat, lon], 15);
             var status = isOnline ? "Online" : "Offline";
             if (sos) status = "SOS ACTIVE";
-            alert(Soldier ${idShort}\n❤️ Heart Rate: ${heartRate} bpm\n🌡️ Temperature: ${temperature}°C\n📡 Status: ${status});
+            alert("Soldier " + idShort + "\n❤️ Heart Rate: " + heartRate + " bpm\n🌡️ Temperature: " + temperature + "°C\n📡 Status: " + status);
         }
 
+        // 8. Broadcast button: send message via Unity callback
         document.getElementById('broadcastBtn').addEventListener('click', function() {
             var msg = document.getElementById('broadcastMsg').value;
             if (msg.trim() === "") return;
