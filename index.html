@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>COMBAT‑AID Commander</title>
+    <title>COMBAT‑AID Commander Map</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { margin:0; padding:0; }
-        #map { position:absolute; top:0; bottom:0; width:100%; background:#e0e7f0; }
+        #map { position:absolute; top:0; bottom:0; width:100%; }
         #soldier-panel {
             position: absolute;
             top: 10px;
             left: 10px;
             width: 280px;
-            background: rgba(30,30,30,0.92);
+            background: rgba(30,30,30,0.9);
             color: white;
             border-radius: 8px;
             padding: 12px;
@@ -22,6 +22,7 @@
             font-size: 12px;
             z-index: 1000;
             backdrop-filter: blur(4px);
+            pointer-events: auto;
             max-height: 85%;
             overflow-y: auto;
             border: 1px solid #3a6ea5;
@@ -38,7 +39,9 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .soldier-entry:hover { background: #3a6ea5; }
+        .soldier-entry:hover {
+            background: #3a6ea5;
+        }
         .soldier-id { font-weight: bold; font-size: 13px; }
         .soldier-status { font-size: 10px; margin-top: 4px; }
         .online { color: #2ecc71; }
@@ -69,19 +72,6 @@
             cursor: pointer;
         }
         #broadcastBtn:hover { background: #2c4e73; }
-        #debug-panel {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            color: lime;
-            font-family: monospace;
-            font-size: 10px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            z-index: 1000;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body>
@@ -94,30 +84,16 @@
         </div>
     </div>
     <div id="map"></div>
-    <div id="debug-panel"></div>
-
     <script>
-        function debugLog(msg) {
-            var panel = document.getElementById('debug-panel');
-            if (panel) {
-                panel.innerHTML = msg + '<br>' + panel.innerHTML;
-                if (panel.innerHTML.length > 500) panel.innerHTML = panel.innerHTML.slice(0, 500);
-            }
-            console.log(msg);
-        }
-
+        // Center on Patna
         var map = L.map('map').setView([25.5941, 85.1376], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OSM &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 19
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
-        debugLog("Map ready");
 
         var markers = {};
 
         function addMarker(id, lat, lon, color, label) {
-            debugLog("addMarker: " + id + " " + lat + "," + lon + " " + color);
             if (markers[id]) {
                 markers[id].setLatLng([lat, lon]);
                 markers[id].setStyle({ fillColor: color, color: color });
@@ -143,57 +119,40 @@
             }
         }
 
-        // Simplified: accept a string where each soldier is separated by '|'
-        // Format: idShort,lat,lon,hr,temp,isOnline,sos,lastSeen
-        function updateSoldierListSimple(dataString) {
-            debugLog("updateSoldierListSimple called with: " + dataString);
+        // Update soldier list panel
+        function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
-            if (!dataString || dataString === "") {
+            if (!soldiersArray.length) {
                 listDiv.innerHTML = '<div style="text-align:center;">No soldiers online</div>';
                 return;
             }
-            var soldiers = dataString.split('|');
             var html = '';
-            for (var i = 0; i < soldiers.length; i++) {
-                var parts = soldiers[i].split(',');
-                if (parts.length < 7) continue;
-                var idShort = parts[0];
-                var lat = parseFloat(parts[1]);
-                var lon = parseFloat(parts[2]);
-                var heartRate = parts[3];
-                var temperature = parts[4];
-                var isOnline = parts[5] === 'true';
-                var sos = parts[6] === 'true';
-                var lastSeen = parts[7] || '';
-
-                var statusClass = isOnline ? 'online' : 'offline';
-                var statusText = isOnline ? '● Online' : '○ Offline';
-                if (sos) {
+            soldiersArray.forEach(function(s) {
+                var statusClass = s.isOnline ? 'online' : 'offline';
+                var statusText = s.isOnline ? '● Online' : '○ Offline';
+                if (s.sos) {
                     statusClass = 'sos';
                     statusText = '🔴 SOS ACTIVE';
                 }
-                html += `<div class="soldier-entry" onclick="centerOn(${lat}, ${lon}, '${idShort}', ${heartRate}, ${temperature}, ${isOnline}, ${sos})">`;
-                html += `<div class="soldier-id">🎖️ ${idShort}</div>`;
-                html += `<div class="health">❤️ ${heartRate} bpm &nbsp; 🌡️ ${temperature}°C</div>`;
-                html += `<div class="soldier-status ${statusClass}">${statusText}</div>`;
-                if (lastSeen) html += `<div style="font-size:9px; color:#aaa;">Last update: ${lastSeen}</div>`;
-                html += `</div>`;
-            }
+                html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ')">';
+                html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
+                html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
+                html += '<div class="soldier-status ' + statusClass + '">' + statusText + '</div>';
+                html += '</div>';
+            });
             listDiv.innerHTML = html;
-            debugLog("Updated list with " + soldiers.length + " soldiers");
         }
 
-        function centerOn(lat, lon, idShort, heartRate, temperature, isOnline, sos) {
+        function centerOn(lat, lon) {
             map.setView([lat, lon], 15);
-            var status = isOnline ? "Online" : "Offline";
-            if (sos) status = "SOS ACTIVE";
-            alert("Soldier " + idShort + "\n❤️ HR: " + heartRate + "\n🌡️ Temp: " + temperature + "\n📡 " + status);
         }
 
+        // Broadcast message to Unity (which will send to Firestore)
         document.getElementById('broadcastBtn').addEventListener('click', function() {
             var msg = document.getElementById('broadcastMsg').value;
             if (msg.trim() === "") return;
+            // Use the prompt hack to send to Unity's WebView callback
             prompt("broadcast:" + msg);
             document.getElementById('broadcastMsg').value = "";
         });
