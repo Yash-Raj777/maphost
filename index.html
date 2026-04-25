@@ -39,9 +39,7 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .soldier-entry:hover {
-            background: #3a6ea5;
-        }
+        .soldier-entry:hover { background: #3a6ea5; }
         .soldier-id { font-weight: bold; font-size: 13px; }
         .soldier-status { font-size: 10px; margin-top: 4px; }
         .online { color: #2ecc71; }
@@ -87,8 +85,10 @@
     <script>
         // Center on Patna
         var map = L.map('map').setView([25.5941, 85.1376], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attribution">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
         }).addTo(map);
 
         var markers = {};
@@ -119,7 +119,6 @@
             }
         }
 
-        // Update soldier list panel
         function updateSoldierList(soldiersArray) {
             var listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
@@ -129,16 +128,19 @@
             }
             var html = '';
             soldiersArray.forEach(function(s) {
-                var statusClass = s.isOnline ? 'online' : 'offline';
-                var statusText = s.isOnline ? '● Online' : '○ Offline';
+                // Status line: SOS first, then online/offline
+                var statusHtml = '';
                 if (s.sos) {
-                    statusClass = 'sos';
-                    statusText = '🔴 SOS ACTIVE';
+                    statusHtml += '<span class="sos">🔴 SOS</span><br>';
                 }
+                var onlineClass = s.isOnline ? 'online' : 'offline';
+                var onlineText = s.isOnline ? '● Online' : '○ Offline';
+                statusHtml += '<span class="' + onlineClass + '">' + onlineText + '</span>';
+                
                 html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ')">';
                 html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
                 html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
-                html += '<div class="soldier-status ' + statusClass + '">' + statusText + '</div>';
+                html += '<div class="soldier-status">' + statusHtml + '</div>';
                 html += '</div>';
             });
             listDiv.innerHTML = html;
@@ -148,11 +150,9 @@
             map.setView([lat, lon], 15);
         }
 
-        // Broadcast message to Unity (which will send to Firestore)
         document.getElementById('broadcastBtn').addEventListener('click', function() {
             var msg = document.getElementById('broadcastMsg').value;
             if (msg.trim() === "") return;
-            // Use the prompt hack to send to Unity's WebView callback
             prompt("broadcast:" + msg);
             document.getElementById('broadcastMsg').value = "";
         });
