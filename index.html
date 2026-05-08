@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Firebase SDKs (v9 modular, but we use compat for simplicity) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
         body { margin:0; padding:0; }
         #map { position:absolute; top:0; bottom:0; width:100%; }
@@ -70,6 +74,19 @@
             cursor: pointer;
         }
         #broadcastBtn:hover { background: #2c4e73; }
+        #toast-msg {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1001;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -82,13 +99,45 @@
         </div>
     </div>
     <div id="map"></div>
+    <div id="toast-msg"></div>
+
     <script>
-        var map = L.map('map').setView([25.5941, 85.1376], 13);
+        // ==================== FIREBASE CONFIG (YOURS) ====================
+        const firebaseConfig = {
+            apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
+            authDomain: "combat-aid.firebaseapp.com",
+            databaseURL: "https://combat-aid-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "combat-aid",
+            storageBucket: "combat-aid.firebasestorage.app",
+            messagingSenderId: "454132547541",
+            appId: "1:454132547541:web:2457e77a43989d675f875c",
+            measurementId: "G-ZHQ9J8NCDP"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        // Anonymous sign-in (required for Firestore write)
+        firebase.auth().signInAnonymously()
+            .then(() => console.log("Firebase auth success"))
+            .catch(err => console.error("Auth error:", err));
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast-msg');
+            toast.textContent = msg;
+            toast.style.color = isError ? '#f66' : '#0f0';
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // ==================== MAP (Patna, OSM tiles) ====================
+        const map = L.map('map').setView([25.5941, 85.1376], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        var markers = {};
+        let markers = {};
 
         function addMarker(id, lat, lon, color, label) {
             if (markers[id]) {
@@ -96,7 +145,7 @@
                 markers[id].setStyle({ fillColor: color, color: color });
                 markers[id].setPopupContent(label);
             } else {
-                var marker = L.circleMarker([lat, lon], {
+                const marker = L.circleMarker([lat, lon], {
                     radius: 10,
                     fillColor: color,
                     color: color,
@@ -117,24 +166,24 @@
         }
 
         function updateSoldierList(soldiersArray) {
-            var listDiv = document.getElementById('soldier-list');
+            const listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
-            if (!soldiersArray.length) {
+            if (!soldiersArray || soldiersArray.length === 0) {
                 listDiv.innerHTML = '<div style="text-align:center;">No soldiers online</div>';
                 return;
             }
-            var html = '';
-            soldiersArray.forEach(function(s) {
-                var statusHtml = '';
+            let html = '';
+            soldiersArray.forEach(s => {
+                let statusHtml = '';
                 if (s.sos) statusHtml += '<span class="sos">🔴 SOS</span><br>';
-                var onlineClass = s.isOnline ? 'online' : 'offline';
-                var onlineText = s.isOnline ? '● Online' : '○ Offline';
-                statusHtml += '<span class="' + onlineClass + '">' + onlineText + '</span>';
-                html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ')">';
-                html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
-                html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
-                html += '<div class="soldier-status">' + statusHtml + '</div>';
-                html += '</div>';
+                const onlineClass = s.isOnline ? 'online' : 'offline';
+                const onlineText = s.isOnline ? '● Online' : '○ Offline';
+                statusHtml += `<span class="${onlineClass}">${onlineText}</span>`;
+                html += `<div class="soldier-entry" onclick="centerOn(${s.lat}, ${s.lon})">
+                            <div class="soldier-id">🎖️ ${s.idShort}</div>
+                            <div class="health">❤️ ${s.heartRate} bpm &nbsp; 🌡️ ${s.temperature}°C</div>
+                            <div class="soldier-status">${statusHtml}</div>
+                         </div>`;
             });
             listDiv.innerHTML = html;
         }
@@ -143,12 +192,26 @@
             map.setView([lat, lon], 15);
         }
 
-        document.getElementById('broadcastBtn').addEventListener('click', function() {
-            var msg = document.getElementById('broadcastMsg').value;
-            if (msg.trim() === "") return;
-            prompt("broadcast:" + msg);
-            document.getElementById('broadcastMsg').value = "";
+        // ==================== BROADCAST BUTTON (Direct Firestore Write) ====================
+        document.getElementById('broadcastBtn').addEventListener('click', () => {
+            const msg = document.getElementById('broadcastMsg').value.trim();
+            if (msg === "") return;
+
+            db.collection("broadcasts").add({
+                message: msg,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                sender: "commander"
+            }).then(() => {
+                showToast(`✅ Broadcast sent: "${msg}"`);
+                document.getElementById('broadcastMsg').value = "";
+            }).catch(err => {
+                console.error("Firestore write error:", err);
+                showToast(`❌ Error: ${err.message}`, true);
+            });
         });
+
+        // Small debug to confirm Firebase is ready
+        console.log("HTML page fully loaded, Firebase initialised.");
     </script>
 </body>
 </html>
