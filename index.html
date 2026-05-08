@@ -37,6 +37,26 @@
             text-align: center;
             color: #ffd966;
         }
+        .filter-buttons {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .filter-btn {
+            flex: 1;
+            background: #3a6ea5;
+            border: none;
+            color: white;
+            padding: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .filter-btn.active {
+            background: #ff9800;
+            color: black;
+            font-weight: bold;
+        }
         .soldier-entry {
             border-bottom: 1px solid #555;
             padding: 8px;
@@ -87,7 +107,7 @@
             z-index: 1001;
             display: none;
         }
-        /* Alert log panel styles */
+        /* Alert log panel */
         .alert-log {
             position: absolute;
             top: 10px;
@@ -132,11 +152,37 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        /* Map legend */
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 10px;
+            z-index: 1000;
+            color: white;
+            pointer-events: none;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
     </style>
 </head>
 <body>
     <div id="soldier-panel">
         <h3>📡 SOLDIER STATUS <span id="soldier-count" style="font-size:11px; background:#3a6ea5; padding:2px 6px; border-radius:12px;">0</span></h3>
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="online">Online</button>
+            <button class="filter-btn" data-filter="sos">SOS</button>
+        </div>
         <div id="soldier-list">Loading...</div>
         <div class="broadcast-area">
             <input type="text" id="broadcastMsg" placeholder="Commander message..." />
@@ -150,6 +196,12 @@
         <div id="alertList">No alerts yet</div>
     </div>
     <button id="showAlertsBtn" onclick="toggleAlertLog()">📋 SOS</button>
+    <div class="map-legend">
+        <div><span class="legend-color" style="background:#2ecc71;"></span> Healthy</div>
+        <div><span class="legend-color" style="background:#ff9800;"></span> Moderate risk</div>
+        <div><span class="legend-color" style="background:#e74c3c;"></span> High risk / SOS</div>
+        <div><span class="legend-color" style="background:#95a5a6;"></span> Offline</div>
+    </div>
 
     <script>
         // ==================== FIREBASE CONFIG (YOURS) ====================
@@ -164,21 +216,16 @@
             measurementId: "G-ZHQ9J8NCDP"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        
-        // Anonymous sign-in
-        firebase.auth().signInAnonymously()
-            .then(() => console.log("Firebase auth success"))
-            .catch(err => console.error("Auth error:", err));
+        firebase.auth().signInAnonymously().catch(err => console.error(err));
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast-msg');
             toast.textContent = msg;
             toast.style.color = isError ? '#f66' : '#0f0';
             toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            setTimeout(() => toast.style.display = 'none', 3000);
         }
 
         // ==================== MAP ====================
@@ -186,7 +233,6 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
-
         let markers = {};
 
         function addMarker(id, lat, lon, color, label) {
@@ -215,17 +261,31 @@
             }
         }
 
+        // Raw soldier data (from Unity)
+        let allSoldiers = [];
+        let currentFilter = 'all';
+
         function updateSoldierList(soldiersArray) {
-            const listDiv = document.getElementById('soldier-list');
+            allSoldiers = soldiersArray;
+            applyFilter();
             const countSpan = document.getElementById('soldier-count');
             if (countSpan) countSpan.innerText = soldiersArray.length;
+        }
+
+        function applyFilter() {
+            let filtered = [];
+            if (currentFilter === 'all') filtered = allSoldiers;
+            else if (currentFilter === 'online') filtered = allSoldiers.filter(s => s.isOnline);
+            else if (currentFilter === 'sos') filtered = allSoldiers.filter(s => s.sos);
+
+            const listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
-            if (!soldiersArray.length) {
-                listDiv.innerHTML = '<div style="text-align:center;">No soldiers online</div>';
+            if (!filtered.length) {
+                listDiv.innerHTML = '<div style="text-align:center;">No soldiers match</div>';
                 return;
             }
             let html = '';
-            soldiersArray.forEach(s => {
+            filtered.forEach(s => {
                 let statusHtml = '';
                 if (s.sos) statusHtml += '<span class="sos">🔴 SOS</span><br>';
                 const onlineClass = s.isOnline ? 'online' : 'offline';
@@ -244,10 +304,19 @@
             map.setView([lat, lon], 15);
         }
 
-        // ==================== ALERT LOG PANEL ====================
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.getAttribute('data-filter');
+                applyFilter();
+            });
+        });
+
+        // ==================== ALERT LOG ====================
         function toggleAlertLog() {
-            const log = document.getElementById('alertLog');
-            log.classList.toggle('show');
+            document.getElementById('alertLog').classList.toggle('show');
         }
 
         function updateAlertLog(alertsArray) {
@@ -264,7 +333,7 @@
             container.innerHTML = html;
         }
 
-        // ==================== BROADCAST BUTTON ====================
+        // ==================== BROADCAST ====================
         document.getElementById('broadcastBtn').addEventListener('click', () => {
             const msg = document.getElementById('broadcastMsg').value.trim();
             if (msg === "") return;
@@ -276,12 +345,12 @@
                 showToast(`✅ Broadcast sent: "${msg}"`);
                 document.getElementById('broadcastMsg').value = "";
             }).catch(err => {
-                console.error("Firestore write error:", err);
+                console.error(err);
                 showToast(`❌ Error: ${err.message}`, true);
             });
         });
 
-        console.log("HTML page fully loaded, Firebase initialised.");
+        console.log("HTML loaded");
     </script>
 </body>
 </html>
