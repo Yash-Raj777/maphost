@@ -140,17 +140,27 @@
             padding: 4px;
             font-size: 10px;
         }
-        #showAlertsBtn {
+        /* Buttons on top-right */
+        .top-right-buttons {
             position: absolute;
             top: 10px;
-            right: 280px;
+            right: 10px;
             z-index: 1001;
+            display: flex;
+            gap: 8px;
+        }
+        .top-btn {
             background: #e74c3c;
             color: white;
             border: none;
             padding: 4px 8px;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 11px;
+        }
+        .clear-sos-btn {
+            background: #ff9800;
+            color: black;
         }
         /* Map legend */
         .map-legend {
@@ -191,11 +201,16 @@
     </div>
     <div id="map"></div>
     <div id="toast-msg"></div>
+
+    <!-- Alert Log and Clear SOS buttons (top-right) -->
+    <div class="top-right-buttons">
+        <button class="top-btn" id="showAlertsBtn">📋 SOS</button>
+        <button class="top-btn clear-sos-btn" id="clearSOSBtn">🧹 Clear SOS</button>
+    </div>
     <div class="alert-log" id="alertLog">
         <div class="alert-title" onclick="toggleAlertLog()">🔔 SOS ALERTS (click to hide)</div>
         <div id="alertList">No alerts yet</div>
     </div>
-    <button id="showAlertsBtn" onclick="toggleAlertLog()">📋 SOS</button>
     <div class="map-legend">
         <div><span class="legend-color" style="background:#2ecc71;"></span> Healthy</div>
         <div><span class="legend-color" style="background:#ff9800;"></span> Moderate risk</div>
@@ -204,7 +219,7 @@
     </div>
 
     <script>
-        // ==================== FIREBASE CONFIG (YOURS) ====================
+        // ==================== FIREBASE CONFIG ====================
         const firebaseConfig = {
             apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
             authDomain: "combat-aid.firebaseapp.com",
@@ -218,7 +233,7 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        firebase.auth().signInAnonymously().catch(err => console.error(err));
+        firebase.auth().signInAnonymously().catch(err => console.error("Auth error:", err));
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast-msg');
@@ -261,7 +276,7 @@
             }
         }
 
-        // Raw soldier data (from Unity)
+        // Raw soldier data
         let allSoldiers = [];
         let currentFilter = 'all';
 
@@ -333,6 +348,32 @@
             container.innerHTML = html;
         }
 
+        // ==================== CLEAR SOS BUTTON ====================
+        async function clearAllSOS() {
+            showToast("Clearing all SOS alerts...");
+            try {
+                // 1. Mark all unacknowledged alerts as acknowledged
+                const alertsSnap = await db.collection("alerts").where("acknowledged", "==", false).get();
+                const batch1 = db.batch();
+                alertsSnap.forEach(doc => batch1.update(doc.ref, { acknowledged: true }));
+                await batch1.commit();
+
+                // 2. Reset all soldiers' sos flag to false
+                const soldiersSnap = await db.collection("users").where("role", "==", "soldier").get();
+                const batch2 = db.batch();
+                soldiersSnap.forEach(doc => batch2.update(doc.ref, { sos: false }));
+                await batch2.commit();
+
+                showToast("✅ All SOS cleared");
+                // Optionally refresh the map (markers will update via listener)
+            } catch (err) {
+                console.error(err);
+                showToast("❌ Error clearing SOS: " + err.message, true);
+            }
+        }
+
+        document.getElementById('clearSOSBtn').addEventListener('click', clearAllSOS);
+
         // ==================== BROADCAST ====================
         document.getElementById('broadcastBtn').addEventListener('click', () => {
             const msg = document.getElementById('broadcastMsg').value.trim();
@@ -350,7 +391,9 @@
             });
         });
 
-        console.log("HTML loaded");
+        document.getElementById('showAlertsBtn').addEventListener('click', toggleAlertLog);
+
+        console.log("HTML fully loaded");
     </script>
 </body>
 </html>
