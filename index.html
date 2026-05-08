@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Firebase SDKs (v9 modular, but we use compat for simplicity) -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -87,11 +87,56 @@
             z-index: 1001;
             display: none;
         }
+        /* Alert log panel styles */
+        .alert-log {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 260px;
+            background: rgba(0,0,0,0.85);
+            color: #ffaa66;
+            border-radius: 8px;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 11px;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            border: 1px solid #e74c3c;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .alert-log.show { display: block; }
+        .alert-title {
+            cursor: pointer;
+            padding: 4px;
+            background: #3a6ea5;
+            text-align: center;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+        .alert-entry {
+            border-bottom: 1px solid #555;
+            padding: 4px;
+            font-size: 10px;
+        }
+        #showAlertsBtn {
+            position: absolute;
+            top: 10px;
+            right: 280px;
+            z-index: 1001;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <div id="soldier-panel">
-        <h3>📡 SOLDIER STATUS</h3>
+        <h3>📡 SOLDIER STATUS <span id="soldier-count" style="font-size:11px; background:#3a6ea5; padding:2px 6px; border-radius:12px;">0</span></h3>
         <div id="soldier-list">Loading...</div>
         <div class="broadcast-area">
             <input type="text" id="broadcastMsg" placeholder="Commander message..." />
@@ -100,6 +145,11 @@
     </div>
     <div id="map"></div>
     <div id="toast-msg"></div>
+    <div class="alert-log" id="alertLog">
+        <div class="alert-title" onclick="toggleAlertLog()">🔔 SOS ALERTS (click to hide)</div>
+        <div id="alertList">No alerts yet</div>
+    </div>
+    <button id="showAlertsBtn" onclick="toggleAlertLog()">📋 SOS</button>
 
     <script>
         // ==================== FIREBASE CONFIG (YOURS) ====================
@@ -118,7 +168,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         
-        // Anonymous sign-in (required for Firestore write)
+        // Anonymous sign-in
         firebase.auth().signInAnonymously()
             .then(() => console.log("Firebase auth success"))
             .catch(err => console.error("Auth error:", err));
@@ -131,7 +181,7 @@
             setTimeout(() => { toast.style.display = 'none'; }, 3000);
         }
 
-        // ==================== MAP (Patna, OSM tiles) ====================
+        // ==================== MAP ====================
         const map = L.map('map').setView([25.5941, 85.1376], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -167,8 +217,10 @@
 
         function updateSoldierList(soldiersArray) {
             const listDiv = document.getElementById('soldier-list');
+            const countSpan = document.getElementById('soldier-count');
+            if (countSpan) countSpan.innerText = soldiersArray.length;
             if (!listDiv) return;
-            if (!soldiersArray || soldiersArray.length === 0) {
+            if (!soldiersArray.length) {
                 listDiv.innerHTML = '<div style="text-align:center;">No soldiers online</div>';
                 return;
             }
@@ -192,11 +244,30 @@
             map.setView([lat, lon], 15);
         }
 
-        // ==================== BROADCAST BUTTON (Direct Firestore Write) ====================
+        // ==================== ALERT LOG PANEL ====================
+        function toggleAlertLog() {
+            const log = document.getElementById('alertLog');
+            log.classList.toggle('show');
+        }
+
+        function updateAlertLog(alertsArray) {
+            const container = document.getElementById('alertList');
+            if (!container) return;
+            if (!alertsArray.length) {
+                container.innerHTML = 'No alerts yet';
+                return;
+            }
+            let html = '';
+            alertsArray.slice(0,5).forEach(a => {
+                html += `<div class="alert-entry">🚨 ${a.soldierId} - ${a.timestamp}</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // ==================== BROADCAST BUTTON ====================
         document.getElementById('broadcastBtn').addEventListener('click', () => {
             const msg = document.getElementById('broadcastMsg').value.trim();
             if (msg === "") return;
-
             db.collection("broadcasts").add({
                 message: msg,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
@@ -210,7 +281,6 @@
             });
         });
 
-        // Small debug to confirm Firebase is ready
         console.log("HTML page fully loaded, Firebase initialised.");
     </script>
 </body>
