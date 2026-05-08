@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -104,7 +106,7 @@
             border-radius: 6px;
             font-family: monospace;
             font-size: 12px;
-            z-index: 1001;
+            z-index: 1002;
             display: none;
         }
         /* Alert log panel */
@@ -140,7 +142,7 @@
             padding: 4px;
             font-size: 10px;
         }
-        /* Buttons on top-right */
+        /* Top-right buttons */
         .top-right-buttons {
             position: absolute;
             top: 10px;
@@ -158,9 +160,20 @@
             cursor: pointer;
             font-size: 11px;
         }
-        .clear-sos-btn {
-            background: #ff9800;
-            color: black;
+        .clear-sos-btn { background: #ff9800; color: black; }
+        .export-btn { background: #2ecc71; color: black; }
+        /* Mission timer */
+        .mission-timer {
+            position: absolute;
+            top: 10px;
+            right: 380px;
+            background: #333;
+            color: #0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            z-index: 1001;
+            font-size: 12px;
         }
         /* Map legend */
         .map-legend {
@@ -183,6 +196,33 @@
             border-radius: 50%;
             margin-right: 4px;
         }
+        /* Graph modal */
+        #graphModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 420px;
+            background: #222;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 1003;
+            border: 1px solid #ff9800;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #graphModal h4 { margin-top: 0; text-align: center; }
+        #closeGraphBtn {
+            margin-top: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -202,10 +242,12 @@
     <div id="map"></div>
     <div id="toast-msg"></div>
 
-    <!-- Alert Log and Clear SOS buttons (top-right) -->
+    <!-- Top row: timer and buttons -->
+    <div class="mission-timer" id="missionTimer">⏱️ Mission: 00:00</div>
     <div class="top-right-buttons">
         <button class="top-btn" id="showAlertsBtn">📋 SOS</button>
         <button class="top-btn clear-sos-btn" id="clearSOSBtn">🧹 Clear SOS</button>
+        <button class="top-btn export-btn" id="exportBtn">📁 Export CSV</button>
     </div>
     <div class="alert-log" id="alertLog">
         <div class="alert-title" onclick="toggleAlertLog()">🔔 SOS ALERTS (click to hide)</div>
@@ -218,8 +260,15 @@
         <div><span class="legend-color" style="background:#95a5a6;"></span> Offline</div>
     </div>
 
+    <!-- Graph Modal -->
+    <div id="graphModal">
+        <h4>Heart Rate History</h4>
+        <canvas id="hrChart" width="400" height="200"></canvas>
+        <button id="closeGraphBtn">Close</button>
+    </div>
+
     <script>
-        // ==================== FIREBASE CONFIG ====================
+        // ==================== FIREBASE CONFIG (YOURS) ====================
         const firebaseConfig = {
             apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
             authDomain: "combat-aid.firebaseapp.com",
@@ -235,6 +284,16 @@
         const db = firebase.firestore();
         firebase.auth().signInAnonymously().catch(err => console.error("Auth error:", err));
 
+        // ==================== MISSION TIMER ====================
+        let missionStart = Date.now();
+        setInterval(() => {
+            let elapsed = Math.floor((Date.now() - missionStart) / 1000);
+            let mins = Math.floor(elapsed / 60);
+            let secs = elapsed % 60;
+            document.getElementById('missionTimer').innerHTML = `⏱️ Mission: ${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        }, 1000);
+
+        // ==================== UTILITIES ====================
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast-msg');
             toast.textContent = msg;
@@ -292,7 +351,6 @@
             if (currentFilter === 'all') filtered = allSoldiers;
             else if (currentFilter === 'online') filtered = allSoldiers.filter(s => s.isOnline);
             else if (currentFilter === 'sos') filtered = allSoldiers.filter(s => s.sos);
-
             const listDiv = document.getElementById('soldier-list');
             if (!listDiv) return;
             if (!filtered.length) {
@@ -306,7 +364,7 @@
                 const onlineClass = s.isOnline ? 'online' : 'offline';
                 const onlineText = s.isOnline ? '● Online' : '○ Offline';
                 statusHtml += `<span class="${onlineClass}">${onlineText}</span>`;
-                html += `<div class="soldier-entry" onclick="centerOn(${s.lat}, ${s.lon})">
+                html += `<div class="soldier-entry" onclick="showSoldierGraph('${s.soldierId}', '${s.idShort}')">
                             <div class="soldier-id">🎖️ ${s.idShort}</div>
                             <div class="health">❤️ ${s.heartRate} bpm &nbsp; 🌡️ ${s.temperature}°C</div>
                             <div class="soldier-status">${statusHtml}</div>
@@ -315,25 +373,62 @@
             listDiv.innerHTML = html;
         }
 
-        function centerOn(lat, lon) {
-            map.setView([lat, lon], 15);
+        // ==================== GRAPH MODAL ====================
+        let currentChart = null;
+        async function showSoldierGraph(soldierId, soldierName) {
+            const modal = document.getElementById('graphModal');
+            modal.style.display = 'block';
+            try {
+                const historyRef = db.collection("users").doc(soldierId).collection("health_history").orderBy("timestamp", "desc").limit(10);
+                const snap = await historyRef.get();
+                const heartRates = [];
+                const labels = [];
+                snap.docs.reverse().forEach(doc => {
+                    heartRates.push(doc.data().heartRate);
+                    let time = doc.data().timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || '';
+                    labels.push(time);
+                });
+                const ctx = document.getElementById('hrChart').getContext('2d');
+                if (currentChart) currentChart.destroy();
+                currentChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{ label: `Heart Rate (bpm) - ${soldierName}`, data: heartRates, borderColor: '#ff6384', tension: 0.2 }]
+                    },
+                    options: { responsive: false, maintainAspectRatio: true }
+                });
+            } catch (err) {
+                console.error(err);
+                showToast("Failed to load heart rate history", true);
+            }
         }
-
-        // Filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFilter = btn.getAttribute('data-filter');
-                applyFilter();
-            });
+        document.getElementById('closeGraphBtn').addEventListener('click', () => {
+            document.getElementById('graphModal').style.display = 'none';
         });
+
+        // ==================== CSV EXPORT ====================
+        function exportToCSV() {
+            let csvRows = [["Soldier ID", "Latitude", "Longitude", "Heart Rate", "Temperature", "Online", "SOS"]];
+            allSoldiers.forEach(s => {
+                csvRows.push([s.idShort, s.lat, s.lon, s.heartRate, s.temperature, s.isOnline ? "Yes" : "No", s.sos ? "Yes" : "No"]);
+            });
+            const csvContent = csvRows.map(row => row.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `combat_aid_soldiers_${new Date().toISOString().slice(0,19)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("CSV exported");
+        }
+        document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 
         // ==================== ALERT LOG ====================
         function toggleAlertLog() {
             document.getElementById('alertLog').classList.toggle('show');
         }
-
         function updateAlertLog(alertsArray) {
             const container = document.getElementById('alertList');
             if (!container) return;
@@ -348,30 +443,24 @@
             container.innerHTML = html;
         }
 
-        // ==================== CLEAR SOS BUTTON ====================
+        // ==================== CLEAR SOS ====================
         async function clearAllSOS() {
             showToast("Clearing all SOS alerts...");
             try {
-                // 1. Mark all unacknowledged alerts as acknowledged
                 const alertsSnap = await db.collection("alerts").where("acknowledged", "==", false).get();
                 const batch1 = db.batch();
                 alertsSnap.forEach(doc => batch1.update(doc.ref, { acknowledged: true }));
                 await batch1.commit();
-
-                // 2. Reset all soldiers' sos flag to false
                 const soldiersSnap = await db.collection("users").where("role", "==", "soldier").get();
                 const batch2 = db.batch();
                 soldiersSnap.forEach(doc => batch2.update(doc.ref, { sos: false }));
                 await batch2.commit();
-
                 showToast("✅ All SOS cleared");
-                // Optionally refresh the map (markers will update via listener)
             } catch (err) {
                 console.error(err);
                 showToast("❌ Error clearing SOS: " + err.message, true);
             }
         }
-
         document.getElementById('clearSOSBtn').addEventListener('click', clearAllSOS);
 
         // ==================== BROADCAST ====================
@@ -392,6 +481,16 @@
         });
 
         document.getElementById('showAlertsBtn').addEventListener('click', toggleAlertLog);
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.getAttribute('data-filter');
+                applyFilter();
+            });
+        });
 
         console.log("HTML fully loaded");
     </script>
