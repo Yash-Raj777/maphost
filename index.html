@@ -83,9 +83,7 @@
     </div>
     <div id="map"></div>
     <script>
-        // Center on Patna
         var map = L.map('map').setView([25.5941, 85.1376], 13);
-        // Original OpenStreetMap tiles (no CartoDB)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
@@ -128,13 +126,10 @@
             var html = '';
             soldiersArray.forEach(function(s) {
                 var statusHtml = '';
-                if (s.sos) {
-                    statusHtml += '<span class="sos">🔴 SOS</span><br>';
-                }
+                if (s.sos) statusHtml += '<span class="sos">🔴 SOS</span><br>';
                 var onlineClass = s.isOnline ? 'online' : 'offline';
                 var onlineText = s.isOnline ? '● Online' : '○ Offline';
                 statusHtml += '<span class="' + onlineClass + '">' + onlineText + '</span>';
-                
                 html += '<div class="soldier-entry" onclick="centerOn(' + s.lat + ', ' + s.lon + ')">';
                 html += '<div class="soldier-id">🎖️ ' + s.idShort + '</div>';
                 html += '<div class="health">❤️ ' + s.heartRate + ' bpm &nbsp; 🌡️ ' + s.temperature + '°C</div>';
