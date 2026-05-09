@@ -6,9 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Chart.js for graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -109,7 +107,6 @@
             z-index: 1002;
             display: none;
         }
-        /* Alert log panel */
         .alert-log {
             position: absolute;
             top: 10px;
@@ -142,7 +139,6 @@
             padding: 4px;
             font-size: 10px;
         }
-        /* Top-right buttons */
         .top-right-buttons {
             position: absolute;
             top: 10px;
@@ -162,7 +158,6 @@
         }
         .clear-sos-btn { background: #ff9800; color: black; }
         .export-btn { background: #2ecc71; color: black; }
-        /* Mission timer */
         .mission-timer {
             position: absolute;
             top: 10px;
@@ -175,7 +170,6 @@
             z-index: 1001;
             font-size: 12px;
         }
-        /* Map legend */
         .map-legend {
             position: absolute;
             bottom: 20px;
@@ -196,7 +190,6 @@
             border-radius: 50%;
             margin-right: 4px;
         }
-        /* Graph modal */
         #graphModal {
             display: none;
             position: fixed;
@@ -223,6 +216,15 @@
             width: 100%;
             cursor: pointer;
         }
+        .debug-data {
+            font-size: 10px;
+            max-height: 100px;
+            overflow-y: auto;
+            background: #333;
+            padding: 4px;
+            margin-top: 8px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -242,7 +244,6 @@
     <div id="map"></div>
     <div id="toast-msg"></div>
 
-    <!-- Top row: timer and buttons -->
     <div class="mission-timer" id="missionTimer">⏱️ Mission: 00:00</div>
     <div class="top-right-buttons">
         <button class="top-btn" id="showAlertsBtn">📋 SOS</button>
@@ -260,15 +261,15 @@
         <div><span class="legend-color" style="background:#95a5a6;"></span> Offline</div>
     </div>
 
-    <!-- Graph Modal -->
     <div id="graphModal">
         <h4>Heart Rate History</h4>
         <canvas id="hrChart" width="400" height="200"></canvas>
+        <div id="graphDebug" class="debug-data"></div>
         <button id="closeGraphBtn">Close</button>
     </div>
 
     <script>
-        // ==================== FIREBASE CONFIG (YOURS) ====================
+        // Your Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
             authDomain: "combat-aid.firebaseapp.com",
@@ -279,12 +280,11 @@
             appId: "1:454132547541:web:2457e77a43989d675f875c",
             measurementId: "G-ZHQ9J8NCDP"
         };
-
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         firebase.auth().signInAnonymously().catch(err => console.error("Auth error:", err));
 
-        // ==================== MISSION TIMER ====================
+        // Mission timer
         let missionStart = Date.now();
         setInterval(() => {
             let elapsed = Math.floor((Date.now() - missionStart) / 1000);
@@ -293,7 +293,6 @@
             document.getElementById('missionTimer').innerHTML = `⏱️ Mission: ${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
         }, 1000);
 
-        // ==================== UTILITIES ====================
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast-msg');
             toast.textContent = msg;
@@ -302,7 +301,7 @@
             setTimeout(() => toast.style.display = 'none', 3000);
         }
 
-        // ==================== MAP ====================
+        // Map
         const map = L.map('map').setView([25.5941, 85.1376], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -335,7 +334,6 @@
             }
         }
 
-        // Raw soldier data
         let allSoldiers = [];
         let currentFilter = 'all';
 
@@ -364,7 +362,7 @@
                 const onlineClass = s.isOnline ? 'online' : 'offline';
                 const onlineText = s.isOnline ? '● Online' : '○ Offline';
                 statusHtml += `<span class="${onlineClass}">${onlineText}</span>`;
-                html += `<div class="soldier-entry" onclick="showSoldierGraph('${s.soldierId}', '${s.idShort}')">
+                html += `<div class="soldier-entry" onclick="centerOnAndShowGraph('${s.soldierId}', ${s.lat}, ${s.lon}, '${s.idShort}')">
                             <div class="soldier-id">🎖️ ${s.idShort}</div>
                             <div class="health">❤️ ${s.heartRate} bpm &nbsp; 🌡️ ${s.temperature}°C</div>
                             <div class="soldier-status">${statusHtml}</div>
@@ -373,11 +371,18 @@
             listDiv.innerHTML = html;
         }
 
-        // ==================== GRAPH MODAL ====================
+        // Combined function: center map then show graph
+        function centerOnAndShowGraph(soldierId, lat, lon, soldierName) {
+            map.setView([lat, lon], 15);
+            showSoldierGraph(soldierId, soldierName);
+        }
+
         let currentChart = null;
         async function showSoldierGraph(soldierId, soldierName) {
             const modal = document.getElementById('graphModal');
             modal.style.display = 'block';
+            const debugDiv = document.getElementById('graphDebug');
+            debugDiv.innerHTML = "Loading data...";
             try {
                 const historyRef = db.collection("users").doc(soldierId).collection("health_history").orderBy("timestamp", "desc").limit(10);
                 const snap = await historyRef.get();
@@ -388,44 +393,62 @@
                     let time = doc.data().timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || '';
                     labels.push(time);
                 });
-                const ctx = document.getElementById('hrChart').getContext('2d');
-                if (currentChart) currentChart.destroy();
-                currentChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{ label: `Heart Rate (bpm) - ${soldierName}`, data: heartRates, borderColor: '#ff6384', tension: 0.2 }]
-                    },
-                    options: { responsive: false, maintainAspectRatio: true }
-                });
+                if (heartRates.length === 0) {
+                    debugDiv.innerHTML = "No health history data yet. Send a health update from the soldier app first.";
+                } else {
+                    debugDiv.innerHTML = `Found ${heartRates.length} readings. Values: ${heartRates.join(', ')}`;
+                    const ctx = document.getElementById('hrChart').getContext('2d');
+                    if (currentChart) currentChart.destroy();
+                    currentChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{ label: `Heart Rate (bpm) - ${soldierName}`, data: heartRates, borderColor: '#ff6384', tension: 0.2 }]
+                        },
+                        options: { responsive: false, maintainAspectRatio: true }
+                    });
+                }
             } catch (err) {
                 console.error(err);
+                debugDiv.innerHTML = "Error loading data: " + err.message;
                 showToast("Failed to load heart rate history", true);
             }
         }
+
         document.getElementById('closeGraphBtn').addEventListener('click', () => {
             document.getElementById('graphModal').style.display = 'none';
         });
 
-        // ==================== CSV EXPORT ====================
+        // CSV export with fallback
         function exportToCSV() {
+            if (allSoldiers.length === 0) {
+                showToast("No soldier data to export", true);
+                return;
+            }
             let csvRows = [["Soldier ID", "Latitude", "Longitude", "Heart Rate", "Temperature", "Online", "SOS"]];
             allSoldiers.forEach(s => {
                 csvRows.push([s.idShort, s.lat, s.lon, s.heartRate, s.temperature, s.isOnline ? "Yes" : "No", s.sos ? "Yes" : "No"]);
             });
             const csvContent = csvRows.map(row => row.join(",")).join("\n");
-            const blob = new Blob([csvContent], { type: "text/csv" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `combat_aid_soldiers_${new Date().toISOString().slice(0,19)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast("CSV exported");
+            try {
+                const blob = new Blob([csvContent], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `combat_aid_soldiers_${new Date().toISOString().slice(0,19)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                showToast("CSV export started. Check Downloads folder.");
+            } catch (e) {
+                showToast("Download failed. Check console.", true);
+                console.log(csvContent);
+            }
         }
         document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 
-        // ==================== ALERT LOG ====================
+        // Alert log
         function toggleAlertLog() {
             document.getElementById('alertLog').classList.toggle('show');
         }
@@ -443,7 +466,6 @@
             container.innerHTML = html;
         }
 
-        // ==================== CLEAR SOS ====================
         async function clearAllSOS() {
             showToast("Clearing all SOS alerts...");
             try {
@@ -463,7 +485,6 @@
         }
         document.getElementById('clearSOSBtn').addEventListener('click', clearAllSOS);
 
-        // ==================== BROADCAST ====================
         document.getElementById('broadcastBtn').addEventListener('click', () => {
             const msg = document.getElementById('broadcastMsg').value.trim();
             if (msg === "") return;
@@ -482,17 +503,9 @@
 
         document.getElementById('showAlertsBtn').addEventListener('click', toggleAlertLog);
 
-        // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentFilter = btn.getAttribute('data-filter');
-                applyFilter();
-            });
-        });
-
-        console.log("HTML fully loaded");
-    </script>
-</body>
-</html>
+              
