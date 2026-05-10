@@ -196,7 +196,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 420px;
+            width: 450px;
             background: #222;
             color: white;
             padding: 20px;
@@ -218,12 +218,35 @@
         }
         .debug-data {
             font-size: 10px;
-            max-height: 100px;
+            max-height: 150px;
             overflow-y: auto;
             background: #333;
             padding: 4px;
             margin-top: 8px;
             border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        #csvModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: #222;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 1004;
+            border: 1px solid #2ecc71;
+        }
+        #csvModal textarea {
+            width: 100%;
+            height: 200px;
+            background: #333;
+            color: #0f0;
+            font-family: monospace;
+            margin: 10px 0;
         }
     </style>
 </head>
@@ -268,8 +291,14 @@
         <button id="closeGraphBtn">Close</button>
     </div>
 
+    <div id="csvModal">
+        <h4>📄 CSV Data</h4>
+        <textarea id="csvContent" readonly></textarea>
+        <button id="closeCsvBtn">Close</button>
+    </div>
+
     <script>
-        // Your Firebase configuration
+        // Firebase config (YOURS)
         const firebaseConfig = {
             apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
             authDomain: "combat-aid.firebaseapp.com",
@@ -371,7 +400,6 @@
             listDiv.innerHTML = html;
         }
 
-        // Combined function: center map then show graph
         function centerOnAndShowGraph(soldierId, lat, lon, soldierName) {
             map.setView([lat, lon], 15);
             showSoldierGraph(soldierId, soldierName);
@@ -388,15 +416,18 @@
                 const snap = await historyRef.get();
                 const heartRates = [];
                 const labels = [];
+                const rawData = [];
                 snap.docs.reverse().forEach(doc => {
-                    heartRates.push(doc.data().heartRate);
+                    const hr = doc.data().heartRate;
+                    heartRates.push(hr);
                     let time = doc.data().timestamp?.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || '';
                     labels.push(time);
+                    rawData.push(`HR:${hr} @${time}`);
                 });
                 if (heartRates.length === 0) {
-                    debugDiv.innerHTML = "No health history data yet. Send a health update from the soldier app first.";
+                    debugDiv.innerHTML = "❌ No health history data found.\nMake sure the soldier app has sent health updates.\nFirestore path: users/" + soldierId + "/health_history";
                 } else {
-                    debugDiv.innerHTML = `Found ${heartRates.length} readings. Values: ${heartRates.join(', ')}`;
+                    debugDiv.innerHTML = `✅ Found ${heartRates.length} readings.\nValues: ${heartRates.join(', ')}`;
                     const ctx = document.getElementById('hrChart').getContext('2d');
                     if (currentChart) currentChart.destroy();
                     currentChart = new Chart(ctx, {
@@ -419,7 +450,7 @@
             document.getElementById('graphModal').style.display = 'none';
         });
 
-        // CSV export with fallback
+        // CSV export modal
         function exportToCSV() {
             if (allSoldiers.length === 0) {
                 showToast("No soldier data to export", true);
@@ -430,23 +461,14 @@
                 csvRows.push([s.idShort, s.lat, s.lon, s.heartRate, s.temperature, s.isOnline ? "Yes" : "No", s.sos ? "Yes" : "No"]);
             });
             const csvContent = csvRows.map(row => row.join(",")).join("\n");
-            try {
-                const blob = new Blob([csvContent], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `combat_aid_soldiers_${new Date().toISOString().slice(0,19)}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(url), 100);
-                showToast("CSV export started. Check Downloads folder.");
-            } catch (e) {
-                showToast("Download failed. Check console.", true);
-                console.log(csvContent);
-            }
+            document.getElementById('csvContent').value = csvContent;
+            document.getElementById('csvModal').style.display = 'block';
+            showToast("CSV data ready – copy from window");
         }
         document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+        document.getElementById('closeCsvBtn').addEventListener('click', () => {
+            document.getElementById('csvModal').style.display = 'none';
+        });
 
         // Alert log
         function toggleAlertLog() {
@@ -511,8 +533,6 @@
                 applyFilter();
             });
         });
-
-        console.log("HTML loaded");
     </script>
 </body>
 </html>
