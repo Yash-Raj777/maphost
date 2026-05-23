@@ -298,7 +298,6 @@
     </div>
 
     <script>
-        // Firebase config (YOURS)
         const firebaseConfig = {
             apiKey: "AIzaSyABCm88C1TRQXffPOP4rZOjN7bcPuTUQhg",
             authDomain: "combat-aid.firebaseapp.com",
@@ -313,7 +312,7 @@
         const db = firebase.firestore();
         firebase.auth().signInAnonymously().catch(err => console.error("Auth error:", err));
 
-        // Mission timer
+
         let missionStart = Date.now();
         setInterval(() => {
             let elapsed = Math.floor((Date.now() - missionStart) / 1000);
@@ -330,7 +329,7 @@
             setTimeout(() => toast.style.display = 'none', 3000);
         }
 
-        // Map
+    
         const map = L.map('map').setView([25.5941, 85.1376], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -450,7 +449,6 @@
             document.getElementById('graphModal').style.display = 'none';
         });
 
-        // CSV export modal
         function exportToCSV() {
             if (allSoldiers.length === 0) {
                 showToast("No soldier data to export", true);
@@ -470,7 +468,7 @@
             document.getElementById('csvModal').style.display = 'none';
         });
 
-        // Alert log
+        
         function toggleAlertLog() {
             document.getElementById('alertLog').classList.toggle('show');
         }
